@@ -9,7 +9,7 @@
 
 
 
-#define screenWidth 640			// 屏幕宽度（每一列对应一条射线）
+#define screenWidth  640			// 屏幕宽度（每一列对应一条射线）
 #define screenHeight 480		// 屏幕高度
 #define mapWidth 24
 #define mapHeight 24
@@ -149,13 +149,13 @@ int main(int argc, char* argv[])
 
             // ===================== 计算墙体绘制高度 =====================
             // 距离越远，墙体越矮；距离越近，墙体越高
-            int lineHeight = (int)(screenWidth / perpWallDist);
+            int lineHeight = (int)(screenHeight / perpWallDist);
 
             // 计算墙体在屏幕上的绘制起止坐标（垂直居中）
-            int drawStart = -lineHeight / 2 + screenWidth / 2;
+            int drawStart = -lineHeight / 2 + screenHeight / 2;
             if (drawStart < 0) drawStart = 0; // 防止超出屏幕顶部
-            int drawEnd = lineHeight / 2 + screenWidth / 2;
-            if (drawEnd >= screenWidth) drawEnd = screenWidth - 1; // 防止超出屏幕底部
+            int drawEnd = lineHeight / 2 + screenHeight / 2;
+            if (drawEnd >= screenHeight) drawEnd = screenHeight - 1; // 防止超出屏幕底部
 
             // ===================== 设置墙体颜色 =====================
             // 根据地图中的墙体编号，分配不同颜色
@@ -179,6 +179,9 @@ int main(int argc, char* argv[])
             line(x, drawStart, x, drawEnd);
             
         }
+
+
+
 
         // ===================== 帧率计算 + 移动速度同步 =====================
         oldTime = time;

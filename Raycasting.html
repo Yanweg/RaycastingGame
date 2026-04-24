@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>光线投射</title>
+  <meta content="text/html; charset=us-ascii" http-equiv="content-type" />
+  <link rel="stylesheet" type="text/css" href="stylesheet.css" />
+</head>
+
+<body>
+  <h1>Lode's Computer Graphics Tutorial</h1>
+  <h1>光线投射教程<br /></h1>
+  <h2>目录<br /></h2>
+  <ul>
+    <li><a href="#Introduction">简介</a></li>
+    <li><a href="#The_Basic_Idea_">基本原理</a></li>
+    <li><a href="#Untextured_Raycaster_">无纹理光线投射</a></li>
+    <li><a href="#Textured_Raycaster">有纹理光线投射</a></li>
+    <li><a href="#Wolfenstein_3D_Textures_">Wolfenstein 3D 纹理</a><br /></li>
+    <li><a href="#Performance">性能考虑</a><br /></li>
+  </ul>
+  <a href="index.html">返回索引</a>
+  <h2><a name="Introduction" id="Introduction"></a>简介</h2>
+  光线投射是一种在2D地图上创建3D透视效果的渲染技术。在计算机速度还很慢的年代，实时运行真正的3D引擎是不可能的，而光线投射是第一个解决方案。光线投射可以非常快，因为只需要为屏幕的每条垂直线进行计算。使用这种技术最著名的游戏当然是Wolfenstein
+  3D。<br />
+  <br />
+  <img alt="" src="images/wolf3d.jpg" style="width: 320px; height: 200px;" /><br />
+  <br />
+  Wolfenstein 3D的光线投射引擎非常有限，使其可以在甚至286计算机上运行：所有的墙都有相同的高度，并且在2D网格上是正交的方块，正如这个来自Wolf3D地图编辑器的截图所示：<br />
+  <br />
+  <img alt="" src="images/wolfmapedit.jpg" style="width: 319px; height: 239px;" /><br />
+  <br />
+  像楼梯、跳跃或高度差这些东西在这款引擎中是不可能实现的。后来的游戏如Doom和Duke Nukem
+  3D也使用了光线投射，但使用了更先进的引擎，支持倾斜的墙、不同的高度、有纹理的地面和天花板、透明的墙等等。精灵图（敌人、物体和道具）是2D图像，但本教程暂不讨论精灵图。<br />
+  <br />
+  光线<span style="font-style: italic;">投射</span>与光线<span
+    style="font-style: italic;">追踪</span>不同！光线投射是一种快速的半3D技术，即使在4MHz的图形计算器上也能实时工作，而光线追踪是一种逼真的渲染技术，在真正的3D场景中支持反射和阴影，直到最近计算机才能够在相当高的分辨率和复杂场景下实时运行。<br />
+  <br />
+  本教程提供了无纹理和有纹理光线投射器的完整代码，但内容相当长，你也可以下载代码：<br />
+  <br />
+  <a href="files/raycaster_flat.cpp">raycaster_flat.cpp</a><br />
+  <a href="files/raycaster_textured.cpp">raycaster_textured.cpp</a><br />
+  <br />
+  <br />
+  <h2><a name="The_Basic_Idea_" id="The_Basic_Idea_"></a>基本原理<br /></h2>
+  光线投射的基本原理如下：地图是一个2D方格网格，每个方格可以是0（=无墙）或一个正值（=带有特定颜色或纹理的墙）。<br />
+  <br />
+  对于屏幕上的每个x（即屏幕的每条垂直条带），发出一束射线，从玩家位置开始，方向取决于玩家的视角方向和屏幕的x坐标。然后让这束射线在2D地图上向前移动，直到遇到一个墙的方格。如果它碰到了墙，计算这个碰撞点到玩家的距离，用这个距离计算墙在屏幕上应该画多高：墙越远，它在屏幕上看起来越小，越近，它看起来越高。这些都是2D计算。这张图片显示了两个这样射线的俯视图（红色），从玩家（绿点）开始，碰到蓝色的墙：<br />
+  <br />
+  <img alt="" src="images/raycastgrid.gif" style="width: 192px; height: 192px;" /><br />
+  <br />
+  要找到射线在途中碰到的第一面墙，你必须让它从玩家的位置开始，然后不断检查射线是否在墙内。如果它在墙内（碰撞），那么循环可以停止，计算距离，并用正确的高度绘制墙。如果射线位置不在墙内，你必须继续追踪：在它的位置上加上一个特定的值，方向是这束射线的方向，对于这个新位置，再次检查它是否在墙内。一直这样做，直到最终碰到墙。<br />
+  <br />
+  人类可以立即看到射线在哪里碰到墙，但用单个公式立即找到射线碰到哪个方格是不可能的，因为计算机只能检查射线上的有限数量的位置。许多光线投射器每一步都给射线加上一个常数值，但这样可能会错过一面墙！例如，这束红色的射线，它的位置在每个红点处被检查：<br />
+  <br />
+  <img alt="" src="images/raycastmiss.gif" style="width: 192px; height: 192px;" /><br />
+  <br />
+  正如你所见，射线直线穿过蓝色的墙，但计算机没有检测到，因为它只检查了红点位置处的位置。你检查的位置越多，计算机检测不到墙的机会越小，但需要的计算也越多。这里步长被减半了，所以现在它检测到射线穿过了墙，虽然位置并不完全正确：<br />
+  <br />
+  <img alt="" src="images/raycastmiss2.gif" style="width: 192px; height: 192px;" /><br />
+  <br />
+  用这种方法获得无限精度，需要无限小的步长，因此需要无限的计算量！这相当糟糕，但幸运的是，有一种更好的方法只需要很少的计算就能检测到每面墙：想法是检查射线会碰到的每一面墙。我们给每个方格宽度为1，所以墙的每一面都是一个整数值，而它们之间的位置有点后的值。现在步长不是常数，它取决于到下一面的距离：<br />
+  <br />
+  <img alt="" src="images/raycasthit.gif" style="width: 192px; height: 192px;" /><br />
+  <br />
+  正如你在上面的图片中所看到的，射线正好在我们想要的地方碰到墙。在本教程介绍的方法中，使用了一种基于DDA或"数字微分分析"的算法。DDA是一种在方格网格上快速找到一条线穿过哪些方格的算法（例如在屏幕上画线，屏幕是方格像素的网格）。所以我们也可以用它来找到我们的射线碰到地图上的哪些方格，一旦碰到是墙的方格就停止算法。<br />
+  <br />
+  一些光线追踪器使用欧几里得角来表示玩家和射线的方向，并用另一个角来确定视野。然而，我发现用向量和相机来处理要容易得多：玩家的位置总是一个向量（x和y坐标），但现在我们把方向也做成一个向量：所以方向现在由两个值决定：方向的x和y坐标。一个方向向量可以这样理解：如果你沿着玩家看的方向画一条线，经过玩家的位置，那么这条线上的每个点都是玩家位置与方向向量的倍数的和。方向向量的长度并不真正重要，只是它的方向。将x和y乘以相同的值会改变长度但保持方向不变。<br />
+  <br />
+  这种向量方法还需要一个额外的向量，即相机平面向量。在真正的3D引擎中也有一个相机平面，那里这个平面真的是一个3D平面，所以需要两个向量（u和v）来表示它。然而，光线投射发生在2D地图上，所以这里的相机平面不是真正的平面，而是一条线，用一个向量表示。相机平面应该始终垂直于方向向量。相机平面代表计算机屏幕的表面，而方向向量垂直于它并指向屏幕内部。玩家的位置是一个单点，是位于相机平面前方的一个点。屏幕某个x坐标的特定射线，就是从玩家位置开始并经过屏幕上那个位置（即相机平面）的射线。<br />
+  <br />
+  <img alt="" src="images/raycastingcamera.gif" style="width: 256px; height: 180px;" /><br />
+  <br />
+  上面的图片表示这样一个2D相机。绿点是位置（向量"pos"）。黑线，结束于黑点，代表方向向量（向量"dir"），所以黑点的位置是pos+dir。蓝线代表完整的相机平面，从黑点到右蓝点的向量代表"plane"向量，所以右蓝点的位置是pos+dir+plane，左蓝点的位置是pos+dir-plane（这些都是向量加法）。<br />
+  <br />
+  图片中的红线是几条射线。这些射线的方向很容易从相机计算出来：它是相机方向向量与相机平面向量一部分的和：例如图片中的第三条红线，经过相机平面右侧约1/3长度处的点。所以这条射线的方向是dir +
+  plane*1/3。这个射线方向是向量rayDir，这个向量的X和Y分量被DDA算法使用。<br />
+  <br />
+  两条外线是屏幕的左右边界，这两条线之间的角度叫做视野或FOV。FOV由方向向量的长度与平面长度的比例决定。以下是不同FOV的几个例子：<br />
+  <br />
+  如果方向向量和相机平面向量具有相同的长度，FOV将是90°：<br />
+  <br />
+  <img alt="" src="images/raycastingFOV90.gif" style="width: 256px; height: 180px;" /><br />
+  <br />
+  如果方向向量比相机平面长得多，FOV将远小于90°，你会有非常狭窄的视野。但你会看到更详细的画面，深度也会减少，所以这与放大相同：<br />
+  <br />
+  <img alt="" src="images/raycastingFOV0.gif" style="width: 118px; height: 307px;" /><br />
+  <br />
+  如果方向向量比相机平面短，FOV将大于90°（180°是最大值，如果方向向量接近0），你会有更宽的视野，就像缩小：<br />
+  <br />
+  <img alt="" src="images/raycastingFOV180.gif" style="width: 255px; height: 69px;" /><br />
+  <br />
+  <br />
+  <br />
+  当玩家旋转时，相机也必须旋转，所以方向向量和平面向量都必须旋转。然后，所有的射线都会自动旋转。<br />
+  <br />
+  <img alt="" src="images/raycastingcamerarotate.gif" style="width: 219px; height: 228px;" /><br />
+  <br />
+  要旋转一个向量，用旋转矩阵乘以它<br />
+  <br />
+  <span style="font-family: monospace;">[ cos(a) -sin(a)
+    ]</span><br style="font-family: monospace;" />
+  <span style="font-family: monospace;">[ sin(a)&nbsp; cos(a)
+    ]</span><br />
+  <br />
+  如果你不了解向量和矩阵，试着在谷歌上找一个教程，本教程后面计划有关于这些的附录。<br />
+  <br />
+  没有什么禁止你使用不垂直于方向的相机平面，但结果看起来会像一个"歪斜"的世界。<br />
+
+
+  <h2><a name="Untextured_Raycaster_" id="Untextured_Raycaster_"></a>无纹理光线投射<br /></h2>
+
+
+  在这里下载源代码：<a href="files/raycaster_flat.cpp">raycaster_flat.cpp</a>
+  <br /><br />
+  从基础开始，我们从一个无纹理的光线投射器开始。这个例子还包括一个fps计数器（每秒帧数），以及带有碰撞检测的输入键来移动和旋转。
+  <br /><br />
+  世界地图是一个2D数组，每个值代表一个方格。如果值是0，那个方格代表一个空的、可行走通过的方格，如果值大于0，它代表一面带有特定颜色或纹理的墙。这里定义的地图非常小，只有24×24个方格，直接在代码中定义。对于真正的游戏，如Wolfenstein
+  3D，你使用更大的地图并从文件加载它。网格中的所有零都是空的空间，所以你基本上看到一个非常大的房间，周围有墙（值为1），内部有一个小房间（值为2），一些柱子（值为3），以及一个带有房间的走廊（值为4）。注意这段代码还不在任何函数中，把它放在主函数开始之前。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">#define mapWidth 24
+#define mapHeight 24
+#define screenWidth 640
+#define screenHeight 480
+
+int worldMap[mapWidth][mapHeight]=
+{
+  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,2,2,2,2,2,0,0,0,0,3,0,3,0,3,0,0,0,1},
+  {1,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,2,0,0,0,2,0,0,0,0,3,0,0,0,3,0,0,0,1},
+  {1,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,2,2,0,2,2,0,0,0,0,3,0,3,0,3,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,0,4,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,0,0,0,0,5,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,0,4,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,0,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+};</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  首先声明几个变量：posX和posY代表玩家的位置向量，dirX和dirY代表玩家的方向，planeX和planeY代表玩家的相机平面。确保相机平面垂直于方向，但你可以改变它的长度。方向长度与相机平面的比例决定FOV，这里方向向量比相机平面略长，所以FOV小于90°（更精确地说，FOV是2
+  * atan(0.66/1.0)=66°，这对于第一人称射击游戏来说是完美的）。后来当用输入键旋转时，dir和plane的值会改变，但它们将始终保持垂直并保持相同的长度。<br />
+  <br />
+  变量time和oldTime用于存储当前帧和前一帧的时间，这两个时间之间的差异可用于确定按下某个键时应该移动多少（以使移动和旋转速度与帧计算花费的时间无关），以及用于FPS计数器。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">int main(int /*argc*/, char */*argv*/[])
+{
+  double posX = 22, posY = 12;  //x和y起始位置
+  double dirX = -1, dirY = 0; //初始方向向量
+  double planeX = 0, planeY = 0.66; //2D光线投射版本的相机平面
+
+  double time = 0; //当前帧的时间
+  double oldTime = 0; //前一帧的时间</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  主函数的其余部分现在开始。首先，用选择的分辨率创建屏幕。如果你选择大的分辨率，如1280*1024，效果会相当慢，不是因为光线投射算法慢，而是单纯因为从CPU上传整个屏幕到显卡太慢。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">  screen(screenWidth, screenHeight, 0, "Raycaster");</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  设置好屏幕后，游戏循环开始，这是每一帧绘制并读取输入的循环。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">  while(!done())
+  {
+</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  这里开始实际的光线投射。光线投射循环是一个for循环，遍历每个x，所以不是屏幕的每个像素都有计算，而只是每条垂直条带，这根本不多！开始光线投射循环前，声明和计算一些变量：<br />
+  <br />
+  射线从玩家的位置开始（posX, posY）。<br />
+  <br />
+  cameraX是当前屏幕x坐标在相机平面上代表的x坐标，这样做的原因是屏幕右侧将得到坐标1，屏幕中心得到坐标0，屏幕左侧得到坐标-1。由此，可以如前所述计算射线的方向：作为方向向量与平面向量一部分的和。这必须对向量的x和y坐标都做（因为两个向量相加就是它们的x坐标相加，y坐标也相加）。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">    for(int x = 0; x &lt; w; x++)
+    {
+      //计算射线位置和方向
+      double cameraX = 2 * x / double(w) - 1; //相机空间中的x坐标
+      double rayDirX = dirX + planeX * cameraX;
+      double rayDirY = dirY + planeY * cameraX;</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  在下一段代码中，声明和计算更多与DDA算法相关的变量：<br />
+  <br />
+  mapX和mapY代表射线当前所在的地图方格。射线位置本身是一个浮点数，既包含我们在地图哪个方格的信息，也包含在该方格中**哪里**的信息，但mapX和mapY只是那个方格的坐标。<br />
+  <br />
+  sideDistX和sideDistY最初是射线从起始位置到第一个x side和第一个y side的距离。稍后在代码中当采取步骤时它们会增加。<br />
+  <br />
+  deltaDistX和deltaDistY是射线从1个x side到下一个x side，或从1个y side到下一个y
+  side的距离。下图显示了初始的sideDistX、sideDistY和deltaDistX、deltaDistY：<br />
+  <br />
+  <img alt="" src="images/raycastdelta.gif" style="width: 190px; height: 318px;" /><br />
+  <br />
+  从几何上推导deltaDistX，使用毕达哥拉斯定理，得到下面的公式。对于蓝色三角形（deltaDistX），一边长度为1（因为它恰好是一个单元格），另一边长度为raydirY /
+  raydirX，因为它恰好是在X方向上走1步时射线在Y方向上走的单位量。对于绿色三角形（deltaDistY），公式类似。
+  <p />
+  deltaDistX = sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX))
+  <br />
+  deltaDistY = sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY))
+  <p />
+  但这可以简化为：
+  <p />
+  deltaDistX = abs(|rayDir| / rayDirX)
+  <br />
+  deltaDistY = abs(|rayDir| / rayDirY)
+  <p />
+  其中|rayDir|是向量rayDirX, rayDirY的长度（即sqrt(rayDirX * rayDirX + rayDirY * rayDirY)）：你可以验证sqrt(1 + (rayDirY * rayDirY) /
+  (rayDirX * rayDirX))确实等于abs(sqrt(rayDirX * rayDirX + rayDirY * rayDirY) /
+  rayDirX)。然而，我们可以使用1而不是|rayDir|，因为下面DDA代码中只需要deltaDistX和deltaDistY之间的*比率*，所以我们得到：
+  <p />
+  deltaDistX = abs(1 / rayDirX)
+  <br />
+  deltaDistY = abs(1 / rayDirY)
+  <p />
+  上面给出的在各处都能工作的值。1e30是一个任意选择的足够高的数字，如果你的编程语言支持赋值这个值，可以设置为无穷大。
+  <p />
+  现在，在实际的DDA开始之前，还需要计算stepX、stepY以及初始的sideDistX和sideDistY。<br />
+  <br />
+  如果射线方向有负的x分量，stepX是-1，如果射线方向有正的x分量则是+1。如果x分量为0，stepX是什么值都无所谓，因为届时它不会被使用。<br />
+  y分量也是如此。<br />
+  <br />
+  如果射线方向有负的x分量，sideDistX是从射线起始位置到左侧第一面的距离，如果射线方向有正的x分量，则使用右侧第一面。<br />
+  y分量也是这样，但现在是用第一面上方或下方。<br />
+  对于这些值，使用整数mapX并从中减去实际位置，并根据使用的是左侧还是右侧、上侧还是下侧在某些情况下加上1.0。然后你得到到这面的垂直距离，所以用它乘以deltaDistX或deltaDistY得到真正的欧几里得距离。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">      //计算步长和初始sideDist
+      if (rayDirX &lt; 0)
+      {
+        stepX = -1;
+        sideDistX = (posX - mapX) * deltaDistX;
+      }
+      else
+      {
+        stepX = 1;
+        sideDistX = (mapX + 1.0 - posX) * deltaDistX;
+      }
+      if (rayDirY &lt; 0)
+      {
+        stepY = -1;
+        sideDistY = (posY - mapY) * deltaDistY;
+      }
+      else
+      {
+        stepY = 1;
+        sideDistY = (mapY + 1.0 - posY) * deltaDistY;
+      }</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  现在实际的DDA开始了。它是一个每碰一次墙就递增射线1个方格的循环。每次它要么在x方向（用stepX）跳一个方格，要么在y方向（用stepY）跳一个方格，总是一次跳1个方格。如果射线的方向是x方向，循环将每次只在x方向跳，因为射线永远不会改变它的y方向。如果射线稍微偏向y方向，那么每隔几次x方向的跳跃，射线就必须在y方向跳一个方格。如果射线正好是y方向，它永远不需要在x方向跳，等等...<br />
+  <br />
+  sideDistX和sideDistY每次向它们的方向跳时都会增加deltaDistX，mapX和mapY分别增加stepX和stepY。<br />
+  <br />
+  当射线碰到墙时，循环结束，然后我们就知道在变量"side"中碰到的是x side还是y
+  side的墙，用mapX和mapY知道碰到了哪面墙。然而，我们不知道墙被碰到的确切位置，但这在这种情况下不需要，因为我们暂时不会使用纹理墙。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">      //执行DDA
+      while (hit == 0)
+      {
+        //跳到下一个地图方格，或者在x方向，或者在y方向
+        if (sideDistX &lt; sideDistY)
+        {
+          sideDistX += deltaDistX;
+          mapX += stepX;
+          side = 0;
+        }
+        else
+        {
+          sideDistY += deltaDistY;
+          mapY += stepY;
+          side = 1;
+        }
+        //检查射线是否碰到墙
+        if (worldMap[mapX][mapY] > 0) hit = 1;
+      } </span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  DDA完成后，我们必须计算射线到墙的距离，这样我们才能计算之后墙应该画多高。
+  <p />
+  我们不使用到代表玩家的点的欧几里得距离，而是使用到相机平面的距离（或，碰撞点投影到相机方向上到玩家的距离），以避免鱼眼效应。如果你使用真实距离，鱼眼效应是一种你看到的现象，所有墙都变成圆形的，旋转时可能会让你不舒服。
+  <p />
+  下图显示了我们为什么取到相机平面的距离而不是到玩家的距离。P是玩家，黑线是相机平面：
+  在玩家的左侧，显示了几条从墙上碰撞点到玩家的红色射线，代表欧几里得距离。在玩家的右侧，显示了几条从墙上碰撞点直接到相机平面的绿色射线，而不是到玩家。所以这些绿线的长度是我们将使用的垂直距离的例子，而不是直接欧几里得距离。
+  <p />
+  在图片中，玩家正看着墙，在那种情况下，你期望墙的底部和顶部在屏幕上形成一条完全水平的线。然而，红色射线都有不同的长度，所以会为不同的垂直条带计算不同的墙高度，因此产生圆形效果。右侧的绿色射线都有相同的长度，所以会给出正确的结果。当玩家旋转时，情况仍然适用（那时相机平面不再水平，绿线将有不同的长度，但每条之间仍有恒定的变化），墙成为对角线但在屏幕上仍是直线。这个解释有点粗略，但给出了概念。
+  <p />
+  <img alt="perpWallDist" src="images/raycastdist.png" style="width: 265px; height: 256px;" />
+  <p />
+  注意这段代码不是"鱼眼校正"，因为这里使用的光线投射方法不需要这样的校正，鱼眼效果只是通过这里计算距离的方式避免了。它甚至比计算真实距离更容易计算，我们甚至不需要知道墙被碰到的确切位置。
+  <p />
+  这个垂直距离在代码中叫做"perpWallDist"。一种计算它的方法是使用从点到直线的最短距离公式，其中点是墙被碰到的位置，直线是相机平面：
+  <p />
+  <img alt="perpWallDist" src="images/raycastperpwalldist2.png" style="width: 305px; height: 309px;" />
+  <p />
+  然而，它可以比那更简单地计算：由于deltaDist和sideDist在上面被|rayDir|缩放了，sideDist的长度已经几乎等于perpWallDist。我们只需要从中减去一次deltaDist，往回走一步，因为在上面的DDA步骤中我们多走了一步进入墙内。<br />
+  <br />
+  根据射线碰到X side还是Y side，分别使用sideDistX或sideDistY计算公式。
+  <p />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">      //计算投影到相机方向的距离（使用欧几里得距离会产生鱼眼效果！）
+      if(side == 0) perpWallDist = (sideDistX - deltaDistX);
+      else          perpWallDist = (sideDistY - deltaDistY);</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+
+  <p />
+  下面是perpWallDist公式的更详细推导，针对side == 1的情况。
+  <p />
+  点的含义：
+  <p />
+  <ul>
+    <li>P: 玩家的位置，代码中的(posX, posY)</li>
+    <li>H: 射线碰到墙的碰撞点。它的y位置已知为mapY + (1 - stepY) / 2</li>
+    <li>yDist匹配"(mapY + (1 - stepY) / 2 - posY)"，这是欧几里得距离向量的y坐标，在世界坐标中。这里，(1 - stepY) /
+      2)是一个修正项，基于正或负的y方向为0或1，这也用于sideDistY的初始化。</li>
+    <li>dir: 主玩家观看方向，由代码中的dirX,dirY给出。这个向量的长度恰好始终为1。这匹配屏幕中心的观看方向，而不是当前射线的方向。它垂直于相机平面，perpWallDist平行于它。</li>
+    <li>橙色虚线（可能很难看到，在桌面浏览器中使用CTRL+滚轮或CTRL+加号放大可以看得更清楚）：添加到dir以获得rayDir的值。重要的是，这平行于相机平面，垂直于dir。</li>
+    <li>A: 离H最近的相机平面上的点，即perpWallDist与相机平面相交的点</li>
+    <li>B: 经过玩家的X轴上离H最近的点，即yDist与世界X轴相交的点</li>
+    <li>C: 玩家位置 + rayDirX处的点</li>
+    <li>D: 玩家位置 + rayDir处的点。</li>
+    <li>E: 这是点D减去dir向量后的点，换句话说，E + dir = D。</li>
+    <li>点A、B、C、D、E、H和P用于下面的解释：它们形成了被考虑的三角形：BHP、CDP、AHP和DEP。</li>
+  </ul>
+
+  实际推导：
+
+  <ul>
+    <li>1: 三角形PBH和PCD形状相同但大小不同，所以边比例相同</li>
+    <li>2: 根据步骤1，三角形显示yDist / rayDirY等于欧几里得 / |rayDir|，所以现在我们可以推导出perpWallDist = 欧几里得 / |rayDir|。</li>
+    <li>3: 三角形AHP和EDP形状相同但大小不同，所以边比例相同。边ED的长度，即|ED|，等于dir的长度|dir|，即1。同样，|DP|等于|rayDir|。</li>
+    <li>4: 根据步骤3，三角体显示欧几里得 / |rayDir| = perpWallDist / |dir| = perpWallDist / 1。</li>
+    <li>5: 结合步骤4和2显示perpWallDist = yDist / rayDirY，其中yDist是mapY + (1 - stepY) / 2) - posY</li>
+    <li>6: 在代码中，在DDA步骤后，sideDistY - deltaDistY等于(posY + (1 - stepY) / 2 - mapY) *
+      deltaDistY（鉴于sideDistY是从posY和mapY计算的），所以yDist = (sideDistY - deltaDistY) / deltaDistY</li>
+    <li>7: 鉴于deltaDistY = 1 / |rayDirY|，步骤6给出yDist = (sideDistY - deltaDistY) * |rayDirY|</li>
+    <li>8: 结合步骤5和7给出perpWallDist = yDist / rayDirY = (sideDistY - deltaDistY) / |rayDirY| / rayDirY。</li>
+    <li>9: 鉴于代码中如何处理sideDistY和deltaDistY符号的情况，绝对值无关紧要，等于(sideDistY - deltaDistY)，这是使用的公式</li>
+  </ul>
+
+  <p />
+  <img alt="perpWallDist" src="images/raycastperpwalldist.png" style="width: 265px; height: 256px;" />
+  <p />
+
+  <p />
+  [感谢Thomas van der Berg在2016年指出代码的简化（perpWallDist可以简化并重用值用于wallX）。
+  <br />
+  [感谢Roux Morgan在2020年帮助澄清perpWallDist的解释，在此之前教程缺少一些信息]
+  <br />
+  [感谢Noah Wagner和Elias找到perpWallDist的进一步简化]
+  <p />
+  现在我们有了计算出的距离（perpWallDist），我们可以计算屏幕上要画的线的高度：这是perpWallDist的倒数，然后乘以h，即屏幕的高度（像素），以转换到像素坐标。当然，你也可以乘以另一个值，例如2*h，如果你想让墙更高或更矮。h的值会使墙看起来像等高、宽、深的立方体，而较大的值会创建更高的盒子（取决于你的显示器）。<br />
+  <br />
+  然后从这个lineHeight（即应该在屏幕上画的垂直线的高度）计算出我们真正应该画的起始和结束位置。墙的中心应该在屏幕中心，如果这些点超出屏幕，它们被限制到0或h-1。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">      //计算屏幕上要画的线的高度
+      int lineHeight = (int)(h / perpWallDist);
+
+      //计算当前条带要填充的最低和最高像素
+      int drawStart = -lineHeight / 2 + h / 2;
+      if(drawStart &lt; 0)drawStart = 0;
+      int drawEnd = lineHeight / 2 + h / 2;
+      if(drawEnd &gt;= h)drawEnd = h - 1;</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  最后，根据碰到的墙的数字选择颜色。如果碰到y side，颜色被弄暗一些，这会产生更好的效果。然后用verLine命令画垂直线。这结束了光线投射循环，之后它至少对每个x都做了这些。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">      //选择墙的颜色
+      ColorRGB color;
+      switch(worldMap[mapX][mapY])
+      {
+        case 1:  color = RGB_Red;  break; //红色
+        case 2:  color = RGB_Green;  break; //绿色
+        case 3:  color = RGB_Blue;   break; //蓝色
+        case 4:  color = RGB_White;  break; //白色
+        default: color = RGB_Yellow; break; //黄色
+      }
+
+      //让x和y side有不同的亮度
+      if (side == 1) {color = color / 2;}
+
+      //将条带的像素画成垂直线
+      verLine(x, drawStart, drawEnd, color);
+    }</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  光线投射循环完成后，计算当前和前一帧的时间，计算并打印FPS（每秒帧数），然后重绘屏幕，使一切（所有的墙和fps计数器的值）变得可见。之后用cls()清除后缓冲区，这样当下帧我们再画墙时，地面和天花板将再次是黑色的，而不是仍然包含前一帧的像素。<br />
+  <br />
+  速度修饰符使用frameTime和一个常数值来确定输入键的移动和旋转速度。由于使用了frameTime，我们可以确保移动和旋转速度与处理器速度无关。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">    //输入和FPS计数器的计时
+    oldTime = time;
+    time = getTicks();
+    double frameTime = (time - oldTime) / 1000.0; //frameTime是这一帧花费的时间，以秒为单位
+    print(1.0 / frameTime); //FPS计数器
+    redraw();
+    cls();
+
+    //速度修饰符
+    double moveSpeed = frameTime * 5.0; //常数值以方格/秒为单位
+    double rotSpeed = frameTime * 3.0; //常数值以弧度/秒为单位</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  最后一部分是输入部分，读取键。<br />
+  <br />
+  如果按下上箭头，玩家将向前移动：将dirX加到posX，将dirY加到posY。这假设dirX和dirY是归一化向量（它们的长度是1），但它们最初就是这样设置的，所以没问题。还有一个简单的碰撞检测内置其中，即如果新位置将在墙内，你将不会移动。然而，这个碰撞检测可以改进，例如通过检查玩家周围的圆而不是仅仅一个点不会进入墙内。<br />
+  <br />
+  如果按下下箭头，做同样的事情，但方向是减去而不是加上。<br />
+  <br />
+  要旋转，如果按下左或右箭头，方向向量和平面向量都使用与旋转矩阵相乘的公式旋转（角度是rotSpeed）。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">    readKeys();
+    //如果没有墙在前面就向前移动
+    if (keyDown(SDLK_UP))
+    {
+      if(worldMap[int(posX + dirX * moveSpeed)][int(posY)] == false) posX += dirX * moveSpeed;
+      if(worldMap[int(posX)][int(posY + dirY * moveSpeed)] == false) posY += dirY * moveSpeed;
+    }
+    //如果没有墙在后面就向后移动
+    if (keyDown(SDLK_DOWN))
+    {
+      if(worldMap[int(posX - dirX * moveSpeed)][int(posY)] == false) posX -= dirX * moveSpeed;
+      if(worldMap[int(posX)][int(posY - dirY * moveSpeed)] == false) posY -= dirY * moveSpeed;
+    }
+    //向右旋转
+    if (keyDown(SDLK_RIGHT))
+    {
+      //相机方向和相机平面都必须旋转
+      double oldDirX = dirX;
+      dirX = dirX * cos(-rotSpeed) - dirY * sin(-rotSpeed);
+      dirY = oldDirX * sin(-rotSpeed) + dirY * cos(-rotSpeed);
+      double oldPlaneX = planeX;
+      planeX = planeX * cos(-rotSpeed) - planeY * sin(-rotSpeed);
+      planeY = oldPlaneX * sin(-rotSpeed) + planeY * cos(-rotSpeed);
+    }
+    //向左旋转
+    if (keyDown(SDLK_LEFT))
+    {
+      //相机方向和相机平面都必须旋转
+      double oldDirX = dirX;
+      dirX = dirX * cos(rotSpeed) - dirY * sin(rotSpeed);
+      dirY = oldDirX * sin(rotSpeed) + dirY * cos(rotSpeed);
+      double oldPlaneX = planeX;
+      planeX = planeX * cos(rotSpeed) - planeY * sin(rotSpeed);
+      planeY = oldPlaneX * sin(rotSpeed) + planeY * cos(rotSpeed);
+    }
+  }
+}</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  这结束了无纹理光线投射的代码，结果看起来像这样，你可以在地图中走动：<br />
+  <br />
+  <img alt="" src="images/raycasteruntextured.gif" style="width: 518px; height: 408px;" /><br />
+  <br />
+  这是相机平面不垂直于方向向量的一个例子结果，世界看起来是歪斜的：<br />
+  <br />
+  <img alt="" src="images/raycastingskewed.gif" style="width: 511px; height: 143px;" /><br />
+  <br />
+  <br />
+  <h2><a name="Textured_Raycaster" id="Textured_Raycaster"></a>有纹理的光线投射</h2>
+
+
+  在这里下载源代码：<a href="files/raycaster_textured.cpp">raycaster_textured.cpp</a>
+  <br /><br />
+
+  有纹理版本的光线投射核心几乎相同，只是在最后需要为纹理进行一些额外的计算，并且需要一个y方向的循环来遍历每个像素，以确定应该为其使用纹理的哪个纹理像素（texel）。<br />
+  <br />
+  垂直条带不能再用垂直线命令绘制了，相反，每个像素必须单独绘制。最好的方式是这次使用2D数组作为屏幕缓冲区，然后一次复制到屏幕，这比使用pset要快得多。<br />
+  <br />
+  当然我们现在还需要一个额外的纹理数组，而且由于"drawbuffer"函数使用单一整数值来处理颜色（而不是R、G和B的3个独立字节），纹理也以这种格式存储。通常，你会从纹理文件加载纹理，但对于这个简单的例子，生成了一些简单的纹理。<br />
+  <br />
+  代码大部分与前一个例子相同，粗体部分是新的。只解释新部分。<br />
+  <br />
+  screenWidth和screenHeight现在在开头定义，因为我们需要在screen函数中使用相同的值，并创建屏幕缓冲区。新的还有这里定义的纹理宽度和高度。这些显然是纹理中纹理像素的宽度和高度。<br />
+  <br />
+  世界地图也变了，这是一个更复杂的地图，有走廊和房间来展示不同的纹理。同样，0是可通行的空空间，每个正数对应不同的纹理。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code"><b>#define screenWidth 640
+#define screenHeight 480
+#define texWidth 64
+#define texHeight 64</b>
+#define mapWidth 24
+#define mapHeight 24
+
+int worldMap[mapWidth][mapHeight]=
+{
+  <b>{4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,7,7,7,7,7,7,7,7},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,0,0,0,0,0,0,7},
+  {4,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7},
+  {4,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7},
+  {4,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,7,0,0,0,0,0,0,7},
+  {4,0,4,0,0,0,0,5,5,5,5,5,5,5,5,5,7,7,0,7,7,7,7,7},
+  {4,0,5,0,0,0,0,5,0,5,0,5,0,5,0,5,7,0,0,0,7,7,7,1},
+  {4,0,6,0,0,0,0,5,0,0,0,0,0,0,0,5,7,0,0,0,0,0,0,8},
+  {4,0,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,7,7,1},
+  {4,0,8,0,0,0,0,5,0,0,0,0,0,0,0,5,7,0,0,0,0,0,0,8},
+  {4,0,0,0,0,0,0,5,0,0,0,0,0,0,0,5,7,0,0,0,7,7,7,1},
+  {4,0,0,0,0,0,0,5,5,5,5,0,5,5,5,5,7,7,7,7,7,7,7,1},
+  {6,6,6,6,6,6,6,6,6,6,6,0,6,6,6,6,6,6,6,6,6,6,6,6},
+  {8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {6,6,6,6,6,6,0,6,6,6,6,0,6,6,6,6,6,6,6,6,6,6,6,6},
+  {4,4,4,4,4,4,0,4,4,4,6,0,6,2,2,2,2,2,2,2,3,3,3,3},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4},
+  {4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4},
+  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+};</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  为了更好的纹理，请参阅下一章。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">  screen(<b>screenWidth,screenHeight</b>, 0, "Raycaster");
+
+  <b>//生成一些纹理
+  for(int x = 0; x &lt; texWidth; x++)
+  for(int y = 0; y &lt; texHeight; y++)
+  {
+    int xorcolor = (x * 256 / texWidth) ^ (y * 256 / texHeight);
+    //int xcolor = x * 256 / texWidth;
+    int ycolor = y * 256 / texHeight;
+    int xycolor = y * 128 / texHeight + x * 128 / texWidth;
+    texture[0][texWidth * y + x] = 65536 * 254 * (x != y &amp;&amp; x != texWidth - y); //带黑色十字的平面红色纹理
+    texture[1][texWidth * y + x] = xycolor + 256 * xycolor + 65536 * xycolor; //倾斜灰度
+    texture[2][texWidth * y + x] = 256 * xycolor + 65536 * xycolor; //倾斜黄色渐变
+    texture[3][texWidth * y + x] = xorcolor + 256 * xorcolor + 65536 * xorcolor; //xor灰度
+    texture[4][texWidth * y + x] = 256 * xorcolor; //xor绿色
+    texture[5][texWidth * y + x] = 65536 * 192 * (x % 16 &amp;&amp; y % 16); //红色砖块
+    texture[6][texWidth * y + x] = 65536 * ycolor; //红色渐变
+    texture[7][texWidth * y + x] = 128 + 256 * 128 + 65536 * 128; //平面灰色纹理
+  }</b></span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  这又是游戏循环的开始以及DDA算法之前的初始声明和计算。这里没有变化。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">  //开始主循环
+  while(!done())
+  {
+    for(int x = 0; x &lt; w; x++)
+    {
+      //计算射线位置和方向
+      double cameraX = 2*x/double(w)-1; //相机空间中的x坐标
+      double rayDirX = dirX + planeX*cameraX;
+      double rayDirY = dirY + planeY*cameraX;
+
+      //我们在地图的哪个方格中
+      int mapX = int(posX);
+      int mapY = int(posY);
+
+      //从当前位置到下一个x或y side的射线长度
+      double sideDistX;
+      double sideDistY;
+
+      //从一个x或y side到下一个x或y side的射线长度
+      double deltaDistX = sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
+      double deltaDistY = sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
+      double perpWallDist;
+
+      //在x或y方向上迈步的方向（+1或-1）
+      int stepX;
+      int stepY;
+
+      int hit = 0; //是否碰到了墙？
+      int side; //碰到的是NS还是EW的墙？
+
+      //计算步长和初始sideDist
+      if (rayDirX &lt; 0)
+      {
+        stepX = -1;
+        sideDistX = (posX - mapX) * deltaDistX;
+      }
+      else
+      {
+        stepX = 1;
+        sideDistX = (mapX + 1.0 - posX) * deltaDistX;
+      }
+      if (rayDirY &lt; 0)
+      {
+        stepY = -1;
+        sideDistY = (posY - mapY) * deltaDistY;
+      }
+      else
+      {
+        stepY = 1;
+        sideDistY = (mapY + 1.0 - posY) * deltaDistY;
+      }</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  这又是DDA循环，以及距离和高度的计算，这里也没有变化。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">      //执行DDA
+      while (hit == 0)
+      {
+        //跳到下一个地图方格，或者在x方向，或者在y方向
+        if (sideDistX &lt; sideDistY)
+        {
+          sideDistX += deltaDistX;
+          mapX += stepX;
+          side = 0;
+        }
+        else
+        {
+          sideDistY += deltaDistY;
+          mapY += stepY;
+          side = 1;
+        }
+        //检查射线是否碰到墙
+        if (worldMap[mapX][mapY] &gt; 0) hit = 1;
+      }
+
+      //计算垂直射线的距离（使用欧几里得距离会产生鱼眼效果！）
+      if(side == 0) perpWallDist = (sideDistX - deltaDistX);
+      else          perpWallDist = (sideDistY - deltaDistY);
+
+      //计算屏幕上要画的线的高度
+      int lineHeight = (int)(h / perpWallDist);
+
+      //计算当前条带要填充的最低和最高像素
+      int drawStart = -lineHeight / 2 + h / 2;
+      if(drawStart &lt; 0) drawStart = 0;
+      int drawEnd = lineHeight / 2 + h / 2;
+      if(drawEnd &gt;= h) drawEnd = h - 1;</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  然而，下面的计算是新的，取代了无纹理光线投射的颜色选择器。<br />
+  变量texNum是当前地图方块的值减1，原因是存在纹理0，但地图瓦片0没有纹理，因为它代表一个空的空间。为了能够使用纹理0，减去1，这样值为1的地图瓦片将给出纹理0，等等...<br />
+  <br />
+  值wallX表示墙被碰到的确切值，而不仅仅是墙的整数坐标。这需要知道我们必须使用纹理的哪个x坐标。计算方法是先计算世界中的确切x或y坐标，然后从中减去墙的整数值。注意即使它叫wallX，如果side==1，它实际上是墙的y坐标，但它始终是纹理的x坐标。<br />
+  <br />
+  最后，texX是纹理的x坐标，由wallX计算出来。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code"><b>      //纹理计算
+      int texNum = worldMap[mapX][mapY] - 1; //减去1以便可以使用纹理0！
+
+      //计算wallX的值
+      double wallX; //墙被碰到的确切位置
+      if (side == 0) wallX = posY + perpWallDist * rayDirY;
+      else           wallX = posX + perpWallDist * rayDirX;
+      wallX -= floor((wallX));
+
+      //纹理上的x坐标
+      int texX = int(wallX * double(texWidth));
+      if(side == 0 &amp;&amp; rayDirX &gt; 0) texX = texWidth - texX - 1;
+      if(side == 1 &amp;&amp; rayDirY &lt; 0) texX = texWidth - texX - 1;</b></span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  现在我们知道了纹理的x坐标，我们知道这个坐标将保持不变，因为我们停留在屏幕的同一条垂直条带上。现在我们需要在y方向上需要一个循环来给垂直条带的每个像素正确的纹理y坐标，叫做texY。<br />
+  <br />
+  texY的值通过为一个预计算的步长增加来计算（这是可能的，因为这在垂直条带中是常数）。步长告诉在垂直屏幕坐标中每个像素要增加多少纹理坐标（在浮点数中）。然后它需要将浮点值转换为整数来选择实际的纹理像素。<br />
+  <br />
+  注意：对于这个，可能可以使用更快的仅整数bresenham或DDA算法。<br />
+  <br />
+  注意：这里进行的步进是仿射纹理映射，这意味着我们可以在两点之间线性插值，而不是必须为每个像素计算不同的除法。这在一般情况下不是透视正确的，但对于完全垂直的墙（以及完全水平的地面/天花板）是，所以我们可以将其用于光线投射。<br />
+  <br />
+  然后要绘制的像素的颜色简单地来自texture[texNum][texX][texY]，这是正确纹理上的正确纹理像素。<br />
+  <br />
+  像无纹理的光线投射器一样，这里如果碰到墙的y
+  side，我们也会使颜色值变暗，因为这样看起来更好一点（就像有一种光照）。然而，因为颜色值不是由单独的R、G和B值组成，而是这3个字节粘合在一个整数中，所以使用了一个不那么直观的计算。<br />
+  <br />
+  颜色通过将R、G和B除以2来变暗。将一个十进制数除以10，可以通过移除最后一位来完成（例如300/10是30：最后一位零被移除了）。类似地，将一个二进制数除以2，也就是这里所做的，相当于移除最后一位。这可以通过右移一位>>1来完成。但是，这里我们右移的是一个24位整数（实际上是32位，但前8位未使用）。因此，一个字节的最后一位会成为下一个字节的第一位，这会搞乱颜色值！所以在位移后，每个字节的第一位必须设置为零，这可以通过与二进制值011111110111111101111111进行二进制"与"运算来完成，这是十进制的8355711。所以结果确实是一个更暗的颜色。<br />
+  <br />
+  最后，当前缓冲区像素被设置为此颜色，我们移动到下一个y。<br />
+  <br />
+
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><b><span class="code">            //每个屏幕像素增加多少纹理坐标
+      double step = 1.0 * texHeight / lineHeight;
+      //起始纹理坐标
+      double texPos = (drawStart - h / 2 + lineHeight / 2) * step;
+      for(int y = drawStart; y&lt;drawEnd; y++)
+      {
+        //将纹理坐标转换为整数，并在溢出时用(texHeight - 1)掩码
+        int texY = (int)texPos &amp; (texHeight - 1);
+        texPos += step;
+        Uint32 color = texture[texNum][texHeight * texY + texX];
+        //为y side使颜色变暗：R、G和B字节每个除以二，用"移位"和"与"
+        if(side == 1) color = (color >> 1) &amp; 8355711;
+        buffer[y][x] = color;
+      }
+    }</span></b></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+
+  <br />
+  现在缓冲区仍然需要被绘制，之后它需要被清除（在无纹理版本中我们只需使用"cls"）。确保按扫描线顺序执行以提高缓存局部性的速度。代码的其余部分又是相同的。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">    <b>drawBuffer(buffer[0]);
+    for(int y = 0; y &lt; h; y++) for(int x = 0; x &lt; w; x++) buffer[y][x] = 0; //清除缓冲区而不是cls()</b>
+    //输入和FPS计数器的计时
+    oldTime = time;
+    time = getTicks();
+    double frameTime = (time - oldTime) / 1000.0; //frameTime是这一帧花费的时间，以秒为单位
+    print(1.0 / frameTime); //FPS计数器
+    redraw();
+
+    //速度修饰符
+    double moveSpeed = frameTime * 5.0; //常数值以方格/秒为单位
+    double rotSpeed = frameTime * 3.0; //常数值以弧度/秒为单位</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br />
+  这里又是按键部分，这里也没有变化。如果你想可以尝试添加横扫键（向左和向右横扫）。这些需要以与上下键相同的方式制作，但使用planeX和planeY而不是dirX和dirY。<br />
+  <br />
+
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">    readKeys();
+    //如果没有墙在前面就向前移动
+    if (keyDown(SDLK_UP))
+    {
+      if(worldMap[int(posX + dirX * moveSpeed)][int(posY)] == false) posX += dirX * moveSpeed;
+      if(worldMap[int(posX)][int(posY + dirY * moveSpeed)] == false) posY += dirY * moveSpeed;
+    }
+    //如果没有墙在后面就向后移动
+    if (keyDown(SDLK_DOWN))
+    {
+      if(worldMap[int(posX - dirX * moveSpeed)][int(posY)] == false) posX -= dirX * moveSpeed;
+      if(worldMap[int(posX)][int(posY - dirY * moveSpeed)] == false) posY -= dirY * moveSpeed;
+    }
+    //向右旋转
+    if (keyDown(SDLK_RIGHT))
+    {
+      //相机方向和相机平面都必须旋转
+      double oldDirX = dirX;
+      dirX = dirX * cos(-rotSpeed) - dirY * sin(-rotSpeed);
+      dirY = oldDirX * sin(-rotSpeed) + dirY * cos(-rotSpeed);
+      double oldPlaneX = planeX;
+      planeX = planeX * cos(-rotSpeed) - planeY * sin(-rotSpeed);
+      planeY = oldPlaneX * sin(-rotSpeed) + planeY * cos(-rotSpeed);
+    }
+    //向左旋转
+    if (keyDown(SDLK_LEFT))
+    {
+      //相机方向和相机平面都必须旋转
+      double oldDirX = dirX;
+      dirX = dirX * cos(rotSpeed) - dirY * sin(rotSpeed);
+      dirY = oldDirX * sin(rotSpeed) + dirY * cos(rotSpeed);
+      double oldPlaneX = planeX;
+      planeX = planeX * cos(rotSpeed) - planeY * sin(rotSpeed);
+      planeY = oldPlaneX * sin(rotSpeed) + planeY * cos(rotSpeed);
+    }
+  }
+}</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+
+  <br />
+  这里有几张结果截图：<br />
+  <br />
+  <img alt="" src="images/raycasttexture1.gif" style="width: 319px; height: 239px;" /> <img alt=""
+    src="images/raycasttexture2.gif" style="width: 320px; height: 239px;" /> <img alt=""
+    src="images/raycasttexture3.gif" style="width: 319px; height: 239px;" />
+  <br /><br />
+  注意：通常图像按水平扫描线存储，但对于光线投射器，纹理是按垂直条带绘制的。因此，为了最佳利用CPU缓存并避免页面错误，将纹理在内存中按垂直条带而不是按水平扫描线存储可能更高效。要做到这一点，在生成纹理后，交换它们的X和Y（此代码仅在texWidth和texHeight相同时有效）：
+  <br /><br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">  //交换纹理X/Y，因为它们将作为垂直条带使用
+  for(size_t i = 0; i &lt; 8; i++)
+  for(size_t x = 0; x &lt; texSize; x++)
+  for(size_t y = 0; y &lt; x; y++)
+  std::swap(texture[i][texSize * y + x], texture[i][texSize * x + y]);</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br /><br />
+  或者就在生成纹理的地方交换X和Y，但在许多情况下，从图像加载或从其他格式获取纹理后，你将按扫描线存储它，你仍然必须以这种方式交换它。
+  <br /><br />
+  当从纹理获取像素时，使用以下代码代替：
+  <br /><br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">Uint32 color = texture[texNum][texSize * texX + texY];</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+
+  <h2><a name="Wolfenstein_3D_Textures_" id="Wolfenstein_3D_Textures_"></a>Wolfenstein 3D 纹理</h2>
+  不要只是生成一些纹理，让我们从图像加载几个！例如以下8个纹理，它们来自Wolfenstein 3D，版权归ID Software所有。<br />
+  <br />
+  <img alt="" src="images/wolftextures.png" style="width: 512px; height: 64px;" /><br />
+  <br />
+  只需将代码中生成纹理模式的部分替换为以下内容（并确保这些纹理在正确的路径中）。你可以在这里下载纹理 <a href="files/wolftex.zip">here</a>。<br />
+  <br />
+  <center>
+    <table class="codetable">
+      <tr>
+        <td style="vertical-align: top;">
+          <pre><span class="code">  //生成一些纹理
+  unsigned long tw, th;
+  loadImage(texture[0], tw, th, "pics/eagle.png");
+  loadImage(texture[1], tw, th, "pics/redbrick.png");
+  loadImage(texture[2], tw, th, "pics/purplestone.png");
+  loadImage(texture[3], tw, th, "pics/greystone.png");
+  loadImage(texture[4], tw, th, "pics/bluestone.png");
+  loadImage(texture[5], tw, th, "pics/mossy.png");
+  loadImage(texture[6], tw, th, "pics/wood.png");
+  loadImage(texture[7], tw, th, "pics/colorstone.png");</span></pre>
+        </td>
+      </tr>
+    </table>
+  </center>
+  <br /><br />
+  <img alt="" src="images/wolftex1.gif" style="width: 399px; height: 299px;" /> <img alt="" src="images/wolftex2.gif"
+    style="width: 400px; height: 300px;" /><br />
+  <br />
+  在原始的Wolfenstein 3D中，一面墙的一侧的颜色也比另一侧暗，以创造阴影效果，但他们每次使用单独的纹理，一个暗和一个亮。然而，这里每面墙只使用一个纹理，而将R、G和B除以2的那行代码使y side变暗。<br />
+  <br />
+  <h2><a name="Performance" id="Performance"></a>性能考虑</h2>
+
+  在现代计算机上，当使用高分辨率（4K，截至2019年），这个软件光线投射器将比一些更复杂的3D图形在带有3D显卡的GPU上渲染得更慢。
+  <p />
+  至少有兩個問題阻礙了本教程中光線投射器代碼的速度，如果你想為非常高的分辨率製作一個超快速的光線投射器，可以考慮這些：
+  <ul>
+    <li>
+      光線投射使用垂直條帶工作，但屏幕緩沖區在內存中是按水平掃描線排列的。所以繪製垂直條帶對緩存局部性不利（實際上這是最壞情況），在現代機器上，失去良好緩存可能比一些3D計算更損害速度。可以用更好的緩存行為對其進行編程（例如一次處理多個條帶，使用緩存無關轉置算法，或使用90度旋轉的光線投射器），但為簡單起見，本教程的其餘部分忽略了这个缓存问题。
+    </li>
+    <li>
+      這使用SDL進行軟件blitting（在QuickCG中，在redraw()中），與硬件渲染相比，對於大分辨率來說這很慢。QuickCG對SDL本身的使用可能不是最優的，例如使用OpenGL（即使對於軟件渲染）也可能更快，所以這可能是可以幕後修復的。由於此CG教程是關於軟件渲染的，這裡也忽略了這個問題。
+    </li>
+  </ul>
+  <br />
+  <br />
+  <h2>下一部分</h2>
+  <a href="raycasting2.html">直接進入第二部分</a>
+  <h2><br /></h2>
+  <hr />
+  最後編輯：2020
+  <br /><br />
+  版權所有 (c) 2004-2020 Lode Vandevenne。保留所有權利。
+  <script language="javascript" src="colorcode.js"></script>
+</body>
+
+</html>
